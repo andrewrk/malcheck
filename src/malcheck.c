@@ -126,6 +126,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     free(new_environ_bytes);
+    free(child_argv);
 
     int child_return_value;
     pid_t id = waitpid(child_id, &child_return_value, 0);
