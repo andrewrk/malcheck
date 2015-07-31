@@ -45,15 +45,11 @@ int main(int argc, char **argv) {
                     fail_index = atoi(argv[i]);
                 } else if (strcmp(arg, "--libmalcheck") == 0) {
                     libmalcheck_path = argv[i];
-                } else if (strcmp(arg, "--") == 0) {
-                    for (int j = 1; i < argc; i += 1, j += 1)
-                        child_argv[j] = argv[i];
-                    break;
                 }
             }
         } else if (!child_exe_path) {
             child_exe_path = argv[i];
-        } else {
+            i += 1;
             for (int j = 1; i < argc; i += 1, j += 1)
                 child_argv[j] = argv[i];
             break;
