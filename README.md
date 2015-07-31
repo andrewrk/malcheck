@@ -3,6 +3,8 @@
 Test your code with malcheck to make sure it handles out of memory
 conditions correctly.
 
+Supported platforms: Linux.
+
 ## Synopsis
 
 Run a program and cause malloc/calloc/realloc to return NULL after N number of
@@ -53,44 +55,65 @@ the error handling code.
 So let's run with `malcheck`:
 
 ```
-$ ./malcheck ./test
+$ malcheck ./test
 malloc some memory!
-malcheck initialized. Allocation index -1 will return NULL.
-ptr1: 0x2123010
-ptr2: 0x2123420
+==malcheck== Loading malloc, free, calloc, and realloc.
+==malcheck== Initialized. Allocation index -1 will return NULL.
+ptr1: 0x9e7010
+ptr2: 0x9e7420
+==malcheck== shutdown. allocs: 2, frees: 2
 ```
 
-The only thing that changed is that we see a message on stderr. by default,
-malcheck does not do any destructive behavior and your program should work
-like normal. This just makes sure `malcheck` successfully was able to override
-malloc/calloc/realloc/free.
+Now we can see that malcheck is running, but it didn't change the behavior of
+the test program. By default, malcheck does not do any destructive behavior
+and your program should work like normal. This just makes sure `malcheck`
+successfully was able to override malloc/calloc/realloc/free.
 
 So now try this:
 
 ```
-$ ./malcheck --fail-index 0 ./test
+$ malcheck --fail-index 0 ./test
 malloc some memory!
-malcheck initialized. Allocation index 0 will return NULL.
+==malcheck== Loading malloc, free, calloc, and realloc.
+==malcheck== Initialized. Allocation index 0 will return NULL.
+==malcheck== malloc returning NULL. Stack trace:
+==malcheck==   at malloc (libmalcheck.c:216)
+==malcheck==   at main (simple.c:7)
 ptr1: (nil)
 handle ptr1 error
-ptr2: 0x120d010
+ptr2: 0x8d83b0
+==malcheck== shutdown. allocs: 139, frees: 48
 ```
+
+It printed a stack trace for the first allocation and made it return NULL.
+The allocation count and free count are skewed because getting the stack trace
+does plenty of allocations and frees.
 
 And with fail index 1...
 
 ```
-$ ./malcheck --fail-index 1 ./test
+$ malcheck --fail-index 1 ./test
 malloc some memory!
-malcheck initialized. Allocation index 1 will return NULL.
-ptr1: 0xfc2010
+==malcheck== Loading malloc, free, calloc, and realloc.
+==malcheck== Initialized. Allocation index 1 will return NULL.
+ptr1: 0x1ea2010
+==malcheck== malloc returning NULL. Stack trace:
+==malcheck==   at malloc (libmalcheck.c:216)
+==malcheck==   at main (simple.c:13)
 ptr2: (nil)
 handle ptr2 error
+==malcheck== shutdown. allocs: 139, frees: 48
 ```
 
-## Building and Running
+## Installing From Source
+
+First make sure elfutils and libunwind are installed, then it's the standard
+cmake installation.
 
 ```
-gcc -shared -o libmalcheck.so libmalcheck.c -fPIC -ldl
-gcc -o malcheck malcheck.c
-./malcheck path/to/exe [--fail-index N] [--libmalcheck libmalcheck.so] [-- args]
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
 ```
