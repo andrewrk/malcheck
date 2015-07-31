@@ -1,6 +1,6 @@
 # malcheck
 
-Test your library with malcheck to make sure it handles out of memory
+Test your code with malcheck to make sure it handles out of memory
 conditions correctly.
 
 ## Synopsis

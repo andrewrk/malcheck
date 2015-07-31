@@ -1,4 +1,2 @@
-*.o
-*.so
-malcheck
-test
+build/
+build2/
