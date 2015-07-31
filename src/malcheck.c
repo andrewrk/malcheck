@@ -13,7 +13,7 @@
 extern char **environ;
 
 static int usage(const char *arg0) {
-    fprintf(stderr, "Usage: %s exe [--fail-index N] [--libmalcheck libmalcheck.so] [-- args]\n", arg0);
+    fprintf(stderr, "Usage: %s [--fail-index N] [--libmalcheck libmalcheck.so] exe [args]\n", arg0);
     return EXIT_FAILURE;
 }
 
@@ -25,10 +25,14 @@ int main(int argc, char **argv) {
     const char *arg0 = argv[0];
 
     const char *libmalcheck_path = MALCHECK_LIBMALCHECKSO;
-    const char *child_exe_path = NULL;
+    char *child_exe_path = NULL;
     int fail_index = -1;
 
-    char **child_argv = NULL;
+    char **child_argv = calloc(argc + 1, sizeof(char *));
+    if (!child_argv) {
+        fprintf(stderr, "failed to alloc mem for child argv\n");
+        return EXIT_FAILURE;
+    }
 
     for (int i = 1; i < argc; i += 1) {
         const char *arg = argv[i];
@@ -42,14 +46,17 @@ int main(int argc, char **argv) {
                 } else if (strcmp(arg, "--libmalcheck") == 0) {
                     libmalcheck_path = argv[i];
                 } else if (strcmp(arg, "--") == 0) {
-                    child_argv = &argv[i];
+                    for (int j = 1; i < argc; i += 1, j += 1)
+                        child_argv[j] = argv[i];
                     break;
                 }
             }
         } else if (!child_exe_path) {
             child_exe_path = argv[i];
         } else {
-            return usage(arg0);
+            for (int j = 1; i < argc; i += 1, j += 1)
+                child_argv[j] = argv[i];
+            break;
         }
     }
 
@@ -69,7 +76,7 @@ int main(int argc, char **argv) {
 
     char *new_environ_bytes = malloc(needed_environ_size);
     if (!new_environ_bytes) {
-        fprintf(stderr, "out of memory for environment\n");
+        fprintf(stderr, "failed to alloc mem for environment\n");
         return EXIT_FAILURE;
     }
 
@@ -117,6 +124,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     if (child_id == 0) {
+        child_argv[0] = child_exe_path;
         execvpe(child_exe_path, child_argv, (char**)new_environ_bytes);
         fprintf(stderr, "unable to spawn %s: %s\n", child_exe_path, strerror(errno));
         return EXIT_FAILURE;

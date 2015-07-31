@@ -121,18 +121,16 @@ static void thread_safe_init(void) {
     pthread_mutex_unlock(&init_mutex);
 }
 
-static void print_trace (void) {
-  void *array[256];
+static void print_trace(void) {
+    void *array[256];
 
-  size_t size = backtrace (array, 256);
-  char **strings = backtrace_symbols (array, size);
+    size_t size = backtrace (array, 256);
+    char **strings = backtrace_symbols (array, size);
 
-  errlog ("Obtained %zd stack frames.\n", size);
+    for (size_t i = 0; i < size; i++)
+        errlog ("%s\n", strings[i]);
 
-  for (size_t i = 0; i < size; i++)
-     errlog ("%s\n", strings[i]);
-
-  free (strings);
+    free (strings);
 }
 
 static void *bootstrap_malloc(size_t size) {
@@ -156,6 +154,7 @@ void *malloc(size_t size) {
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
     if (index == fail_index) {
+        errlog("malloc returning NULL. Stack trace:\n");
         print_trace();
         return NULL;
     }
@@ -187,8 +186,11 @@ void *calloc(size_t nmemb, size_t size) {
     thread_safe_init();
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
-    if (index == fail_index)
+    if (index == fail_index) {
+        errlog("calloc returning NULL. Stack trace:\n");
+        print_trace();
         return NULL;
+    }
 
     void *ptr = orig_calloc(nmemb, size);
     if (ptr)
@@ -204,8 +206,11 @@ void *realloc(void *ptr, size_t size) {
     thread_safe_init();
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
-    if (index == fail_index)
+    if (index == fail_index) {
+        errlog("realloc returning NULL. Stack trace:\n");
+        print_trace();
         return NULL;
+    }
 
     return orig_realloc(ptr, size);
 }
