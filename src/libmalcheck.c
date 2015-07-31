@@ -1,4 +1,8 @@
 #define _GNU_SOURCE
+#define UNW_LOCAL_ONLY
+
+#include <elfutils/libdwfl.h>
+#include <libunwind.h>
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -9,7 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <execinfo.h>
+#include <assert.h>
+#include <unistd.h>
 
 extern char **environ;
 
@@ -43,6 +48,7 @@ static void errlog(const char *format, ...) {
     va_start(ap, format);
     fprintf(stderr, "==malcheck== ");
     vfprintf(stderr, format, ap);
+    fprintf(stderr, "\n");
     va_end(ap);
 }
 
@@ -66,13 +72,13 @@ static inline bool str_has_prefix(const char *big_str, const char *prefix, int p
 }
 
 static void malcheck_on_exit(void) {
-    errlog("shutdown. allocs: %ld, frees: %ld\n", alloc_count, free_count);
+    errlog("shutdown. allocs: %ld, frees: %ld", alloc_count, free_count);
 }
 
 static void init(void) {
     bootstrapping = true;
 
-    errlog("Loading malloc, free, calloc, and realloc.\n");
+    errlog("Loading malloc, free, calloc, and realloc.");
     orig_malloc = dlsym(RTLD_NEXT, "malloc");
     if (!orig_malloc)
         panic("unable to get malloc pointer: %s", dlerror());
@@ -100,7 +106,7 @@ static void init(void) {
     }
     bootstrapping = false;
 
-    errlog("Initialized. Allocation index %ld will return NULL.\n", fail_index);
+    errlog("Initialized. Allocation index %ld will return NULL.", fail_index);
 }
 
 static void thread_safe_init(void) {
@@ -121,16 +127,68 @@ static void thread_safe_init(void) {
     pthread_mutex_unlock(&init_mutex);
 }
 
-static void print_trace(void) {
-    void *array[256];
+static void log_debug_info(const void* ip) {
+    char *debuginfo_path = NULL;
 
-    size_t size = backtrace (array, 256);
-    char **strings = backtrace_symbols (array, size);
+    Dwfl_Callbacks callbacks = {
+        .find_elf = dwfl_linux_proc_find_elf,
+        .find_debuginfo = dwfl_standard_find_debuginfo,
+        .debuginfo_path = &debuginfo_path,
+    };
 
-    for (size_t i = 0; i < size; i++)
-        errlog ("%s\n", strings[i]);
+    Dwfl* dwfl = dwfl_begin(&callbacks);
+    assert(dwfl);
 
-    free (strings);
+    assert(dwfl_linux_proc_report(dwfl, getpid()) == 0);
+    assert(dwfl_report_end(dwfl, NULL, NULL) == 0);
+
+    Dwarf_Addr addr = (uintptr_t)ip;
+
+    Dwfl_Module* module = dwfl_addrmodule(dwfl, addr);
+
+    const char* function_name = dwfl_module_addrname(module, addr);
+
+    fprintf(stderr, "%s (",function_name);
+
+    Dwfl_Line *line = dwfl_getsrc(dwfl, addr);
+    if (line) {
+        int nline;
+        Dwarf_Addr addr;
+        const char* filename = dwfl_lineinfo(line, &addr, &nline, NULL, NULL, NULL);
+        fprintf(stderr, "%s:%d", strrchr(filename,'/') + 1, nline);
+    } else {
+        const char *module_name = dwfl_module_info(module, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        fprintf(stderr, "in %s", module_name);
+    }
+}
+
+__attribute__((noinline))
+static void log_trace(int skip) {
+    unw_context_t uc;
+    unw_getcontext(&uc);
+
+    unw_cursor_t cursor;
+    unw_init_local(&cursor, &uc);
+
+    while (unw_step(&cursor) > 0) {
+        unw_word_t ip;
+        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+
+        unw_word_t offset;
+        char name[128];
+        assert(unw_get_proc_name(&cursor, name, sizeof(name), &offset) == 0);
+
+        if (skip <= 0) {
+            fprintf(stderr, "==malcheck==   at ");
+            log_debug_info((void*)(ip-4));
+            fprintf(stderr, ")\n");
+        }
+
+        if (strcmp(name, "main") == 0)
+            break;
+
+        skip--;
+    }
 }
 
 static void *bootstrap_malloc(size_t size) {
@@ -154,8 +212,8 @@ void *malloc(size_t size) {
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
     if (index == fail_index) {
-        errlog("malloc returning NULL. Stack trace:\n");
-        print_trace();
+        errlog("malloc returning NULL. Stack trace:");
+        log_trace(0);
         return NULL;
     }
 
@@ -187,8 +245,8 @@ void *calloc(size_t nmemb, size_t size) {
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
     if (index == fail_index) {
-        errlog("calloc returning NULL. Stack trace:\n");
-        print_trace();
+        errlog("calloc returning NULL. Stack trace:");
+        log_trace(0);
         return NULL;
     }
 
@@ -207,8 +265,8 @@ void *realloc(void *ptr, size_t size) {
 
     long index = atomic_fetch_add(&next_alloc_index, 1);
     if (index == fail_index) {
-        errlog("realloc returning NULL. Stack trace:\n");
-        print_trace();
+        errlog("realloc returning NULL. Stack trace:");
+        log_trace(0);
         return NULL;
     }
 

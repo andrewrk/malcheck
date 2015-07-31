@@ -2,10 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 cmake_policy(SET CMP0042 NEW)
 cmake_policy(SET CMP0046 NEW)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING
-      "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
-endif()
+set(CMAKE_BUILD_TYPE "Debug" CACHE STRING
+    "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 
 project(malcheck C)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -15,6 +13,12 @@ set(MALCHECK_VERSION_MINOR 0)
 set(MALCHECK_VERSION_PATCH 0)
 set(MALCHECK_VERSION "${MALCHECK_VERSION_MAJOR}.${MALCHECK_VERSION_MINOR}.${MALCHECK_VERSION_PATCH}")
 message("Configuring malcheck version ${MALCHECK_VERSION}")
+
+find_package(unwind)
+include_directories(${UNWIND_INCLUDE_DIR})
+
+find_package(dw)
+include_directories(${DW_INCLUDE_DIR})
 
 set(MALCHECK_SOURCES
     "${CMAKE_SOURCE_DIR}/src/malcheck.c"
@@ -49,6 +53,8 @@ include_directories(
     ${CMAKE_BINARY_DIR}
 )
 target_link_libraries(libmalcheck LINK_PUBLIC
+    ${UNWIND_LIBRARY}
+    ${DW_LIBRARY}
     dl
 )
 install(TARGETS libmalcheck DESTINATION lib)
