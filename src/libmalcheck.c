@@ -113,10 +113,12 @@ static void thread_safe_init(void) {
     if (atomic_load(&initialized))
         return;
 
-    pthread_mutex_lock(&init_mutex);
+    int err = pthread_mutex_lock(&init_mutex);
+    assert(!err);
 
     if (atomic_load(&initialized)) {
-        pthread_mutex_unlock(&init_mutex);
+        err = pthread_mutex_unlock(&init_mutex);
+        assert(!err);
         return;
     }
 
@@ -124,7 +126,8 @@ static void thread_safe_init(void) {
 
     init();
 
-    pthread_mutex_unlock(&init_mutex);
+    err = pthread_mutex_unlock(&init_mutex);
+    assert(!err);
 }
 
 static void log_debug_info(const void* ip) {
