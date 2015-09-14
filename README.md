@@ -48,7 +48,7 @@ ptr2: 0x22ad420
 ```
 
 Systems have so much memory and/or have
-[overcommit](https://en.wikipedia.org/wiki/Memory_overcommitment) enabled which
+[overcommit](http://www.etalabs.net/overcommit.html) enabled which
 prevents the error handling code from ever being run. But we still want to test
 the error handling code.
 
